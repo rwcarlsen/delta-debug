@@ -9,7 +9,6 @@ import (
   "io/ioutil"
   "os"
   "os/exec"
-  "sort"
   "github.com/rwcarlsen/godd"
   "github.com/rwcarlsen/godd/byteinp"
 )
@@ -22,15 +21,16 @@ func init() {
 }
 
 type GccTester struct {
-  expectedErr []byte
+  expectedErrs [][]byte
 }
 
 func NewGccTester(expectedErr io.Reader) (*GccTester, error) {
-  stderr, err := ioutil.ReadAll(expectedErr)
+  data, err := ioutil.ReadAll(expectedErr)
   if err != nil {
     return nil, err
   }
-  return &GccTester{expectedErr: stderr}, nil
+  lines := bytes.Split(data, []byte("\n"))
+  return &GccTester{expectedErrs: lines}, nil
 }
 
 func (t *GccTester) Test(input []byte) bool {
@@ -41,7 +41,15 @@ func (t *GccTester) Test(input []byte) bool {
   _ = cmd.Run()
 
   errput := stderr.Bytes()
-  return !bytes.Contains(errput, t.expectedErr)
+  for _, line := range t.expectedErrs {
+    if !bytes.Contains(errput, line) {
+      return true
+    }
+  }
+  if len(bytes.Split(errput, []byte("\n"))) != len(t.expectedErrs) {
+    return true
+  }
+  return false
 }
 
 func main() {
@@ -54,7 +62,7 @@ func testFile(name, errname string) {
     log.Fatal("oops: ", err)
   }
 
-  wb, err := NewCharBuilder(f)
+  wb, err := byteinp.ByWord(f)
   if err != nil {
     log.Fatal("oops: ", err)
   }
@@ -69,7 +77,7 @@ func testFile(name, errname string) {
     log.Fatal("oops: ", err)
   }
 
-  tcase := &TestCase{B: wb, T: gcctest}
+  tcase := &byteinp.TestCase{B: wb, T: gcctest}
 
   run, err := godd.MinFail(tcase)
   if err != nil {

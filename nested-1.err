@@ -1,1 +1,5 @@
+In function
 internal compiler error: in expand_expr_real, at expr.c:6638
+Please submit a full bug report,
+with preprocessed source if appropriate.
+See <URL:http://gcc.gnu.org/bugs.html> for instructions.
