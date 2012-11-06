@@ -53,6 +53,33 @@ func (wi *WordBuilder) Len() int {
   return len(wi.words)
 }
 
+type CharBuilder struct {
+  data []byte
+}
+
+func NewCharBuilder(r io.Reader) (*CharBuilder, error) {
+  data, err := ioutil.ReadAll(r)
+  if err != nil {
+    return nil, err
+  }
+  return &CharBuilder{data: data}, nil
+}
+
+func (wi *CharBuilder) BuildInput(set godd.Set) []byte {
+  sort.Ints([]int(set))
+
+  input := make([]byte, len(set))
+  for i, index := range set {
+    input[i] = wi.data[index]
+  }
+
+  return input
+}
+
+func (wi *CharBuilder) Len() int {
+  return len(wi.data)
+}
+
 type Tester interface {
   Test(input []byte) bool
 }
@@ -104,7 +131,7 @@ func testFile(name, errname string) {
     log.Fatal("oops: ", err)
   }
 
-  wb, err := NewWordBuilder(f)
+  wb, err := NewCharBuilder(f)
   if err != nil {
     log.Fatal("oops: ", err)
   }
