@@ -16,16 +16,12 @@ var gcc = "/s/gcc-3.4.4/bin/gcc"
 
 func init() {
   log.SetPrefix("mylog:")
-  log.SetFlags(0)
-
-  expectedFail, err := ioutil.ReadFile("expected-fail.txt")
-  if err != nil {
-    log.Fatal(err)
-  }
+  log.SetFlags(log.Lshortfile)
 }
 
 type Builder interface {
   BuildInput(godd.Set) []byte
+  Len() int
 }
 
 type WordBuilder struct {
@@ -48,7 +44,8 @@ func (wi *WordBuilder) BuildInput(set godd.Set) []byte {
     inputWords[i] = wi.words[index]
   }
 
-  return bytes.Join(inputWords, []byte(" "))
+  input := bytes.Join(inputWords, []byte(" "))
+  return append(input, byte('\n'))
 }
 
 func (wi *WordBuilder) Len() int {
@@ -59,26 +56,12 @@ type Tester interface {
   Test(input []byte) bool
 }
 
-type TestCase struct {
-  T Tester
-  B Builder
-}
-
-func (t *TestCase) Test(set godd.Set) bool {
-  input := t.B.BuildInput(set)
-  return T.Test(input)
-}
-
-func (t *TestCase) Len() int {
-  return t.B.Len()
-}
-
 type GccTester struct {
   expectedErr []byte
 }
 
 func NewGccTester(expectedErr io.Reader) (*GccTester, error) {
-  stderr, err := ioutio.ReadAll(expectedErr)
+  stderr, err := ioutil.ReadAll(expectedErr)
   if err != nil {
     return nil, err
   }
@@ -90,15 +73,24 @@ func (t *GccTester) Test(input []byte) bool {
   cmd := exec.Command(gcc, "-c", "-O3", "-xc", "-")
   cmd.Stdin = bytes.NewReader(input)
   cmd.Stderr = &stderr
+  _ = cmd.Run()
 
-  if err := cmd.Run(); err != nil {
-    log.Println("execution err: ", err)
-  }
+  errput := stderr.Bytes()
+  return !bytes.Contains(errput, t.expectedErr)
+}
 
-  //log.Println("input file: \n", string(input), "\n")
-  //errput := stderr.Bytes()
-  //log.Println("errput:\n", string(errput))
-  return !bytes.Equal(output, t.expectedErr)
+type TestCase struct {
+  T Tester
+  B Builder
+}
+
+func (t *TestCase) Test(set godd.Set) bool {
+  input := t.B.BuildInput(set)
+  return t.T.Test(input)
+}
+
+func (t *TestCase) Len() int {
+  return t.B.Len()
 }
 
 func main() {
@@ -116,7 +108,7 @@ func testFile(name, errname string) {
     log.Fatal("oops: ", err)
   }
 
-  f, err := os.Open(errname)
+  f, err = os.Open(errname)
   if err != nil {
     log.Fatal("oops: ", err)
   }
@@ -133,5 +125,5 @@ func testFile(name, errname string) {
     log.Fatal(err)
   }
 
-  fmt.Println("minimal:\n", wb.BuildInput(run.Minimal))
+  log.Println("minimal:\n", string(wb.BuildInput(run.Minimal)))
 }

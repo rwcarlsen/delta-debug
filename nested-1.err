@@ -1,5 +1,1 @@
-gcc-tests/nested-1.c: In function `nested':
-gcc-tests/nested-1.c:11: internal compiler error: in expand_expr_real, at expr.c:6638
-Please submit a full bug report,
-with preprocessed source if appropriate.
-See <URL:http://gcc.gnu.org/bugs.html> for instructions.
+internal compiler error: in expand_expr_real, at expr.c:6638
