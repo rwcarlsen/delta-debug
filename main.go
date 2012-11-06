@@ -2,6 +2,7 @@
 package main
 
 import (
+  "fmt"
   "log"
   "bytes"
   "io"
@@ -84,7 +85,7 @@ type TestCase struct {
   B Builder
 }
 
-func (t *TestCase) Test(set godd.Set) bool {
+func (t *TestCase) Passes(set godd.Set) bool {
   input := t.B.BuildInput(set)
   return t.T.Test(input)
 }
@@ -125,5 +126,5 @@ func testFile(name, errname string) {
     log.Fatal(err)
   }
 
-  log.Println("minimal:\n", string(wb.BuildInput(run.Minimal)))
+  fmt.Print(string(wb.BuildInput(run.Minimal)))
 }
