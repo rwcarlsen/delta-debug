@@ -12,7 +12,7 @@ import (
   "github.com/rwcarlsen/godd"
 )
 
-var expectedFail []byte
+var gcc = "/s/gcc-3.4.4/bin/gcc"
 
 func init() {
   log.SetPrefix("mylog:")
@@ -24,21 +24,23 @@ func init() {
   }
 }
 
-type WordInput struct {
+type Builder interface {
+  BuildInput(godd.Set) []byte
+}
+
+type WordBuilder struct {
   words [][]byte
 }
 
-func NewWordInput(r io.Reader) (*WordInput, error) {
+func NewWordBuilder(r io.Reader) (*WordBuilder, error) {
   data, err := ioutil.ReadAll(r)
   if err != nil {
     return nil, err
   }
-
-
-  return &WordInput{words: bytes.Fields(data)}, nil
+  return &WordBuilder{words: bytes.Fields(data)}, nil
 }
 
-func (wi *WordInput) Test(set godd.Set) bool {
+func (wi *WordBuilder) BuildInput(set godd.Set) []byte {
   sort.Ints([]int(set))
 
   inputWords := make([][]byte, len(set))
@@ -46,19 +48,47 @@ func (wi *WordInput) Test(set godd.Set) bool {
     inputWords[i] = wi.words[index]
   }
 
-  input := bytes.Join(inputWords, []byte(" "))
-  return gccPasses(input)
+  return bytes.Join(inputWords, []byte(" "))
 }
 
-func (wi *WordInput) Len() int {
+func (wi *WordBuilder) Len() int {
   return len(wi.words)
 }
 
-func gccPasses(input []byte) bool {
-  var out, stderr bytes.Buffer
-  cmd := exec.Command("gcc", "-c", "-O3", "-xc", "-")
+type Tester interface {
+  Test(input []byte) bool
+}
+
+type TestCase struct {
+  T Tester
+  B Builder
+}
+
+func (t *TestCase) Test(set godd.Set) bool {
+  input := t.B.BuildInput(set)
+  return T.Test(input)
+}
+
+func (t *TestCase) Len() int {
+  return t.B.Len()
+}
+
+type GccTester struct {
+  expectedErr []byte
+}
+
+func NewGccTester(expectedErr io.Reader) (*GccTester, error) {
+  stderr, err := ioutio.ReadAll(expectedErr)
+  if err != nil {
+    return nil, err
+  }
+  return &GccTester{expectedErr: stderr}, nil
+}
+
+func (t *GccTester) Test(input []byte) bool {
+  var stderr bytes.Buffer
+  cmd := exec.Command(gcc, "-c", "-O3", "-xc", "-")
   cmd.Stdin = bytes.NewReader(input)
-  cmd.Stdout = &out
   cmd.Stderr = &stderr
 
   if err := cmd.Run(); err != nil {
@@ -66,28 +96,42 @@ func gccPasses(input []byte) bool {
   }
 
   //log.Println("input file: \n", string(input), "\n")
-  //output := out.Bytes()
   //errput := stderr.Bytes()
-  //log.Println("output:\n", string(output))
   //log.Println("errput:\n", string(errput))
-  return !bytes.Equal(output, expectedFail)
+  return !bytes.Equal(output, t.expectedErr)
 }
 
 func main() {
-  f, err := os.Open("./gcc-tests/nested-1.c")
+  testFile("./gcc-tests/nested-1.c", "./nested-1.err")
+}
+
+func testFile(name, errname string) {
+  f, err := os.Open(name)
   if err != nil {
     log.Fatal("oops: ", err)
   }
 
-  wi, err := NewWordInput(f)
+  wb, err := NewWordBuilder(f)
   if err != nil {
     log.Fatal("oops: ", err)
   }
 
-  run, err := godd.MinFail(wi)
+  f, err := os.Open(errname)
+  if err != nil {
+    log.Fatal("oops: ", err)
+  }
+
+  gcctest, err := NewGccTester(f)
+  if err != nil {
+    log.Fatal("oops: ", err)
+  }
+
+  tcase := &TestCase{B: wb, T: gcctest}
+
+  run, err := godd.MinFail(tcase)
   if err != nil {
     log.Fatal(err)
   }
 
-  return 
+  fmt.Println("minimal:\n", wb.BuildInput(run.Minimal))
 }
