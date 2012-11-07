@@ -1,0 +1,5 @@
+In function `bar':
+internal compiler error: in find_function_data, at function.c:315
+Please submit a full bug report,
+with preprocessed source if appropriate.
+See <URL:http://gcc.gnu.org/bugs.html> for instructions.
