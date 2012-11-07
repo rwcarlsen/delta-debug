@@ -2,7 +2,6 @@
 package main
 
 import (
-  "fmt"
   "log"
   "bytes"
   "io"
@@ -53,7 +52,10 @@ func (t *GccTester) Test(input []byte) bool {
 }
 
 func main() {
-  testFile("./gcc-tests/nested-1.c", "./nested-1.err")
+  //testFile("./gcc-tests/nested-1.c", "./nested-1.err")
+  testFile("./gcc-tests/20050607-1.c", "./20050607-1.err")
+  //testFile("./gcc-tests/deprecated-2.c", "./deprecated-2.err")
+  //testFile("./gcc-tests/pr22061-1.c", "./pr22061-1.err")
 }
 
 func testFile(name, errname string) {
@@ -63,6 +65,11 @@ func testFile(name, errname string) {
   }
 
   wb, err := byteinp.ByWord(f)
+  if err != nil {
+    log.Fatal("oops: ", err)
+  }
+  f.Seek(0, 0)
+  cb, err := byteinp.ByChar(f)
   if err != nil {
     log.Fatal("oops: ", err)
   }
@@ -77,12 +84,39 @@ func testFile(name, errname string) {
     log.Fatal("oops: ", err)
   }
 
-  tcase := &byteinp.TestCase{B: wb, T: gcctest}
+  wcase := &byteinp.TestCase{B: wb, T: gcctest}
+  ccase := &byteinp.TestCase{B: cb, T: gcctest}
 
-  run, err := godd.MinFail(tcase)
-  if err != nil {
-    log.Fatal(err)
-  }
+  done := make(chan bool)
 
-  fmt.Print(string(wb.BuildInput(run.Minimal)))
-}
+  go func() {
+    run, err := godd.MinFail(wcase)
+    if err != nil {
+      log.Fatal(err)
+    }
+
+    f, err := os.Create("wordmin.c")
+    if err != nil {
+      log.Fatal(err)
+    }
+    f.Write(wb.BuildInput(run.Minimal))
+    done<-true
+  }()
+
+  go func() {
+    run, err := godd.MinFail(ccase)
+    if err != nil {
+      log.Fatal(err)
+    }
+
+    f, err := os.Create("charmin.c")
+    if err != nil {
+      log.Fatal(err)
+    }
+    f.Write(cb.BuildInput(run.Minimal))
+    done<-true
+  }()
+
+  <-done
+  <-done
+} 
