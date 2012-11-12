@@ -48,7 +48,6 @@ func (t *GccTester) Test(input []byte) godd.Outcome {
 	errput := stderr.Bytes()
 
 	lines := bytes.Split(errput, []byte("\n"))
-	fmt.Printf("len(lines)=%v, len(expected)=%v", len(lines), len(t.expectedErrs))
 	if len(lines) == 0 {
 		return godd.Passed
 	} else if len(lines) != len(t.expectedErrs) {
@@ -89,6 +88,9 @@ func main() {
 		builder, err = byteinp.ByLine(f)
 	case "char":
 		builder, err = byteinp.ByChar(f)
+	default:
+		flag.Usage()
+		return
 	}
 
 	if err != nil {
