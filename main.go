@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"./godd"
-	"./godd/byteinp"
 	"io"
 	"io/ioutil"
 	"log"
@@ -38,7 +36,7 @@ func NewGccTester(expectedErr io.Reader) (*GccTester, error) {
 	return &GccTester{expectedErrs: lines}, nil
 }
 
-func (t *GccTester) Test(input []byte) godd.Outcome {
+func (t *GccTester) Test(input []byte) Outcome {
 	var stderr bytes.Buffer
 	cmd := exec.Command(gcc, "-c", "-O3", "-xc", "-")
 	cmd.Stdin = bytes.NewReader(input)
@@ -49,18 +47,18 @@ func (t *GccTester) Test(input []byte) godd.Outcome {
 
 	lines := bytes.Split(errput, []byte("\n"))
 	if len(lines) == 0 {
-		return godd.Passed
+		return Passed
 	} else if len(lines) != len(t.expectedErrs) {
-		return godd.Undetermined
+		return Undetermined
 	}
 
 	for _, line := range t.expectedErrs {
 		if !bytes.Contains(errput, line) {
-			return godd.Undetermined
+			return Undetermined
 		}
 	}
 
-	return godd.Failed
+	return Failed
 }
 
 func main() {
@@ -80,14 +78,14 @@ func main() {
 	}
 	defer f.Close()
 
-	var builder byteinp.Builder
+	var builder Builder
 	switch *granularity {
 	case "word":
-		builder, err = byteinp.ByWord(f)
+		builder, err = ByWord(f)
 	case "line":
-		builder, err = byteinp.ByLine(f)
+		builder, err = ByLine(f)
 	case "char":
-		builder, err = byteinp.ByChar(f)
+		builder, err = ByChar(f)
 	default:
 		flag.Usage()
 		return
@@ -109,12 +107,12 @@ func main() {
 		log.Fatal("oops: ", err)
 	}
 
-	//fmt.Println(string(builder.BuildInput(godd.IntRange(builder.Len()))))
+	//fmt.Println(string(builder.BuildInput(IntRange(builder.Len()))))
 
 	// run minimization test case
-	tcase := &byteinp.TestCase{B: builder, T: gcctest}
+	tcase := &TestCase{B: builder, T: gcctest}
 
-	run, err := godd.MinFail(tcase)
+	run, err := MinFail(tcase)
 	if err != nil {
 		log.Fatal(err)
 	}
