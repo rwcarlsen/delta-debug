@@ -3,7 +3,9 @@ package main
 
 import (
   "log"
+  "flag"
   "bytes"
+  "fmt"
   "io"
   "io/ioutil"
   "os"
@@ -14,9 +16,15 @@ import (
 
 var gcc = "/s/gcc-3.4.4/bin/gcc"
 
+var granularity = flag.String("gran", "word", "granularity of deltas (line, word, or char)")
+
+
 func init() {
-  log.SetPrefix("mylog:")
   log.SetFlags(log.Lshortfile)
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: %s [input-file] [err-file]\n", os.Args[0])
+		flag.PrintDefaults()
+	}
 }
 
 type GccTester struct {
@@ -32,7 +40,7 @@ func NewGccTester(expectedErr io.Reader) (*GccTester, error) {
   return &GccTester{expectedErrs: lines}, nil
 }
 
-func (t *GccTester) Test(input []byte) bool {
+func (t *GccTester) Test(input []byte) godd.Outcome {
   var stderr bytes.Buffer
   cmd := exec.Command(gcc, "-c", "-O3", "-xc", "-")
   cmd.Stdin = bytes.NewReader(input)
@@ -40,83 +48,79 @@ func (t *GccTester) Test(input []byte) bool {
   _ = cmd.Run()
 
   errput := stderr.Bytes()
+
+  lines := bytes.Split(errput, []byte("\n"))
+  fmt.Printf("len(lines)=%v, len(expected)=%v", len(lines), len(t.expectedErrs))
+  if len(lines) == 0 {
+	return godd.Passed
+  } else if len(lines) != len(t.expectedErrs) {
+    return godd.Undetermined
+  }
+
   for _, line := range t.expectedErrs {
     if !bytes.Contains(errput, line) {
-      return true
+      return godd.Undetermined
     }
   }
-  if len(bytes.Split(errput, []byte("\n"))) != len(t.expectedErrs) {
-    return true
-  }
-  return false
+
+  return godd.Failed
 }
 
 func main() {
-  //testFile("./gcc-tests/nested-1.c", "./nested-1.err")
-  testFile("./gcc-tests/20050607-1.c", "./20050607-1.err")
-  //testFile("./gcc-tests/deprecated-2.c", "./deprecated-2.err")
-  //testFile("./gcc-tests/pr22061-1.c", "./pr22061-1.err")
+  flag.Parse()
+
+  if len(flag.Args()) < 2 {
+	  flag.Usage()
+	  return
+  }
+
+  infile, errfile := flag.Arg(0), flag.Arg(1)
+
+  // create builder/deltas for test input
+  f, err := os.Open(infile)
+  if err != nil {
+    log.Fatal("oops: ", err)
+  }
+  defer f.Close()
+
+  var builder byteinp.Builder
+  switch *granularity {
+	case "word": builder, err = byteinp.ByWord(f)
+	case "line": builder, err = byteinp.ByLine(f)
+	case "char": builder, err = byteinp.ByChar(f)
+  }
+
+  if err != nil {
+    log.Fatal("oops: ", err)
+  }
+
+  // load expected failure/error output
+  ef, err := os.Open(errfile)
+  if err != nil {
+    log.Fatal("oops: ", err)
+  }
+  defer ef.Close()
+
+  gcctest, err := NewGccTester(ef)
+  if err != nil {
+    log.Fatal("oops: ", err)
+  }
+
+  //fmt.Println(string(builder.BuildInput(godd.IntRange(builder.Len()))))
+
+  // run minimization test case
+  tcase := &byteinp.TestCase{B: builder, T: gcctest}
+
+    run, err := godd.MinFail(tcase)
+    if err != nil {
+      log.Fatal(err)
+    }
+
+	// create and save output file
+    mf, err := os.Create("minimal-test.c")
+    if err != nil {
+      log.Fatal(err)
+    }
+    mf.Write(builder.BuildInput(run.Minimal))
+	mf.Close()
 }
-
-func testFile(name, errname string) {
-  f, err := os.Open(name)
-  if err != nil {
-    log.Fatal("oops: ", err)
-  }
-
-  wb, err := byteinp.ByWord(f)
-  if err != nil {
-    log.Fatal("oops: ", err)
-  }
-  f.Seek(0, 0)
-  cb, err := byteinp.ByChar(f)
-  if err != nil {
-    log.Fatal("oops: ", err)
-  }
-
-  f, err = os.Open(errname)
-  if err != nil {
-    log.Fatal("oops: ", err)
-  }
-
-  gcctest, err := NewGccTester(f)
-  if err != nil {
-    log.Fatal("oops: ", err)
-  }
-
-  wcase := &byteinp.TestCase{B: wb, T: gcctest}
-  ccase := &byteinp.TestCase{B: cb, T: gcctest}
-
-  done := make(chan bool)
-
-  go func() {
-    run, err := godd.MinFail(wcase)
-    if err != nil {
-      log.Fatal(err)
-    }
-
-    f, err := os.Create("wordmin.c")
-    if err != nil {
-      log.Fatal(err)
-    }
-    f.Write(wb.BuildInput(run.Minimal))
-    done<-true
-  }()
-
-  go func() {
-    run, err := godd.MinFail(ccase)
-    if err != nil {
-      log.Fatal(err)
-    }
-
-    f, err := os.Create("charmin.c")
-    if err != nil {
-      log.Fatal(err)
-    }
-    f.Write(cb.BuildInput(run.Minimal))
-    done<-true
-  }()
-
-  <-done
-  <-done
-} 
