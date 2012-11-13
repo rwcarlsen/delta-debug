@@ -9,3 +9,4 @@ main (void)
   if (N[(char *) x] != N)
     (0);
 }
+

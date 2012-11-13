@@ -1,11 +1,10 @@
 package main
 
 import (
+  "regexp"
 	"bytes"
 	"flag"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -18,22 +17,29 @@ var granularity = flag.String("gran", "word", "granularity of deltas (line, word
 func init() {
 	log.SetFlags(log.Lshortfile)
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s [input-file] [err-file]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s [input-file] \n", os.Args[0])
 		flag.PrintDefaults()
 	}
 }
 
 type GccTester struct {
 	expectedErrs [][]byte
+  errput []byte
 }
 
-func NewGccTester(expectedErr io.Reader) (*GccTester, error) {
-	data, err := ioutil.ReadAll(expectedErr)
-	if err != nil {
-		return nil, err
-	}
-	lines := bytes.Split(data, []byte("\n"))
-	return &GccTester{expectedErrs: lines}, nil
+func NewGccTester(input []byte) *GccTester {
+	t := &GccTester{}
+  t.Test(input)
+	t.expectedErrs = bytes.Split(t.errput, []byte("\n"))
+
+  reg := regexp.MustCompile("^<stdin>:[0-9]*:*")
+  for i, line := range t.expectedErrs {
+    if match := reg.Find(line); match != nil {
+      t.expectedErrs[i] = line[len(match):]
+    }
+  }
+
+  return t
 }
 
 func (t *GccTester) Test(input []byte) Outcome {
@@ -43,9 +49,9 @@ func (t *GccTester) Test(input []byte) Outcome {
 	cmd.Stderr = &stderr
 	_ = cmd.Run()
 
-	errput := stderr.Bytes()
+	t.errput = stderr.Bytes()
 
-	lines := bytes.Split(errput, []byte("\n"))
+	lines := bytes.Split(t.errput, []byte("\n"))
 	if len(lines) == 0 {
 		return Passed
 	} else if len(lines) != len(t.expectedErrs) {
@@ -53,7 +59,7 @@ func (t *GccTester) Test(input []byte) Outcome {
 	}
 
 	for _, line := range t.expectedErrs {
-		if !bytes.Contains(errput, line) {
+		if !bytes.Contains(t.errput, line) {
 			return Undetermined
 		}
 	}
@@ -62,16 +68,14 @@ func (t *GccTester) Test(input []byte) Outcome {
 }
 
 func main() {
-	flag.Parse()
-
-	if len(flag.Args()) < 2 {
+	if flag.Parse(); len(flag.Args()) != 1 {
 		flag.Usage()
 		return
 	}
 
-	infile, errfile := flag.Arg(0), flag.Arg(1)
 
 	// create builder/deltas for test input
+	infile := flag.Arg(0)
 	f, err := os.Open(infile)
 	if err != nil {
 		log.Fatal("oops: ", err)
@@ -95,19 +99,7 @@ func main() {
 		log.Fatal("oops: ", err)
 	}
 
-	// load expected failure/error output
-	ef, err := os.Open(errfile)
-	if err != nil {
-		log.Fatal("oops: ", err)
-	}
-	defer ef.Close()
-
-	gcctest, err := NewGccTester(ef)
-	if err != nil {
-		log.Fatal("oops: ", err)
-	}
-
-	//fmt.Println(string(builder.BuildInput(IntRange(builder.Len()))))
+  gcctest := NewGccTester(builder.BuildInput(IntRange(builder.Len())))
 
 	// run minimization test case
 	tcase := &TestCase{B: builder, T: gcctest}
