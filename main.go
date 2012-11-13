@@ -119,11 +119,5 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// create and save output file
-	mf, err := os.Create("minimal-test.c")
-	if err != nil {
-		log.Fatal(err)
-	}
-	mf.Write(builder.BuildInput(run.Minimal))
-	mf.Close()
+	fmt.Println(string(builder.BuildInput(run.Minimal)))
 }
