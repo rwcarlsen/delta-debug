@@ -1,1 +1,1 @@
-struct{}__attribute__((deprecated))x;
+struct{}__attribute((deprecated))x;

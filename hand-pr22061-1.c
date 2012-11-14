@@ -1,6 +1,2 @@
-int N=1;
-foo(){}
-void bar(char a[][N]){
-  a[0];
-}
+int N;f(){}b(char a[][N]){a[0];}
 
